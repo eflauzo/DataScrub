@@ -1,0 +1,218 @@
+
+//mod data_selector;
+
+/// We derive Deserialize/Serialize so we can persist app state on shutdown.
+//#[derive(serde::Deserialize, serde::Serialize)]
+//#[serde(default)] // if we add new fields, give them default values when deserializing old state
+//mod channel;
+
+//mod data_selector{
+
+//#[derive(Clone, Copy, Debug, PartialEq)]
+
+use egui_extras::{Column, TableBuilder};
+use egui_extras::{Size, StripBuilder};
+use egui::{Frame, vec2, Button, ComboBox, CursorIcon, Id, InnerResponse, Label, LayerId, Order, Response, Sense, Ui, Widget};
+use std::sync::Arc;
+
+use poll_promise::Promise;
+use log::info;
+
+//use super::channel;
+use super::provider::{DataProvider, Channels};
+use super::channel_id::{ChannelId};
+
+//#[derive(serde::Deserialize, serde::Serialize)]
+//#[serde(default)] // if we add new fields, give them default values when deserializing old state
+//#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DataSelector {
+    // Example stuff:
+    //label: String,
+
+    //#[serde(skip)] // This how you opt-out of serialization of a field
+    //value: f32,
+
+    channel_filter: String,
+    //#[serde(skip)] 
+    option_channels_promise: Option<Arc<Promise<Channels>>>,//Vec<channel::Channel>
+} 
+
+impl Default for DataSelector {
+    fn default() -> Self {
+        DataSelector{
+            channel_filter: "".to_owned(),
+            option_channels_promise: None,  //Channels{channels: vec![]}
+            /* 
+            channels: vec![
+                channel::Channel{name: "Channel A".to_owned()},
+                channel::Channel{name: "Channel B".to_owned()},
+                channel::Channel{name: "Channel C".to_owned()},
+                channel::Channel{name: "Channel D".to_owned()},
+                channel::Channel{name: "Channel E".to_owned()},
+                channel::Channel{name: "Channel F".to_owned()},
+                channel::Channel{name: "Channel G".to_owned()},
+            ],
+            */
+        }
+    }
+}
+
+
+impl DataSelector{
+
+    pub fn display_channels(&mut self, ui: &mut egui::Ui, data_provider: Arc<DataProvider>){
+                                    ui.horizontal(|ui| {
+                                        ui.label("Filter: ");
+
+                                        ui.text_edit_singleline(&mut self.channel_filter);
+
+                                        if ui.button("Go!").clicked() {
+                                            //self.value += 1.0;
+                                            log::info!("get channels");
+                                            let x = data_provider.list_channels("root".to_owned(), "all".to_owned());
+                                            self.option_channels_promise = Some(Arc::new(x));
+                                        }
+
+                                    });
+
+                                    //ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
+                                    
+
+                                //egui::TopBottomPanel::bottom("top_panel2").show(ctx, |ui| {
+                                    let mut table = TableBuilder::new(ui)
+                                    .striped(true)
+                                    .resizable(true)
+                                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                                    .column(Column::auto())
+                                    //.column(Column::auto())
+                                    //.column(Column::initial(100.0).range(40.0..=300.0))
+                                    //.column(Column::initial(100.0).at_least(40.0).clip(true))
+                                    .column(Column::remainder())
+                                    .min_scrolled_height(0.0);
+                        
+                                    table
+                                    .header(20.0, |mut header| {
+                                        header.col(|ui| {
+                                            ui.strong("Row");
+                                        });
+                                        header.col(|ui| {
+                                            ui.strong("Interaction");
+                                        });
+                                        // header.col(|ui| {
+                                        //     ui.strong("Expanding content");
+                                        // });
+                                        // header.col(|ui| {
+                                        //     ui.strong("Clipped text");
+                                        // });
+                                        // header.col(|ui| {
+                                        //     ui.strong("Content");
+                                        // });
+                                    })
+                                    .body(|mut body| {
+                                        
+                                        //for row_index in 0..1000 {
+                                        //}
+                                        
+                                        let option_promise_channels = self.option_channels_promise.clone();
+                                        match option_promise_channels {
+                                            // The division was valid
+                                            Some(channels_promise) => {
+                                                if let Some(channels) = channels_promise.ready() {
+                                                    //info!("promise is ready");
+                                                    //println!("promise is ready");
+
+                                                    //for row_index in 0..channels.channels.len() {
+                                                        body.rows(20.0, 40, |mut row| {
+                                                            let row_index = row.index();
+                                                            
+                                                            if (row_index < channels.channels.len()){
+                                                                row.col(|ui| {
+                                                                    ui.label(row_index.to_string());
+                                                                });
+
+                                                                row.col(|ui| {
+                                                                    //ui.checkbox(&mut self.checked, "Click me");
+                                                                    ui.label(row_index.to_string());
+                                                                    //ui.label(row_index.to_string() + " CANALES !");
+                                                                    
+                                                                    //let item_id = 123;
+                                                                    let item_location: i32 = 44;
+                                                                    let ch_id = ChannelId{
+                                                                        data_source: data_provider.clone(),//"".to_owned(),
+
+                                                                        path: "".to_owned(),
+                                                                        channel: channels.channels[row_index].clone(),
+                                                                    };
+                                                                    let item_id = Id::new(("hotdog", row_index));
+                    
+                                                                    ui.dnd_drag_source(item_id, ch_id, |ui| {
+                                                                        ui.label( channels.channels[row_index].clone() );
+                                                                    });
+                    
+                                                                });
+                                                            };
+                                                        });
+
+                                                }else{
+                                                    info!("promise is not ready");
+                                                    println!("promise not ready");
+                                                }
+                                                
+                                            },
+
+                                            // The division was invalid
+                                            None    => {
+                                                println!("Cannot divide by 0");
+                                            },
+                                        }
+
+
+                                        //body.rows(20.0, 40, |mut row| {
+                                        //    let row_index = row.index();
+                                            
+                                            //row.set_selected(self.selection.contains(&row_index));
+                                            
+                                            
+
+                                            /*
+                                            row.col(|ui| {
+                                                ui.label(row_index.to_string());
+                                            });
+                                            row.col(|ui| {
+                                                //ui.checkbox(&mut self.checked, "Click me");
+                                                ui.label(row_index.to_string());
+                                                //ui.label(row_index.to_string() + " CANALES !");
+                                                
+                                                //let item_id = 123;
+                                                let item_location: i32 = 44;
+                                                let item_id = Id::new(("hotdog", row_index));
+
+                                                ui.dnd_drag_source(item_id, item_location, |ui| {
+                                                    ui.label( "Hot Dog ".to_owned() );
+                                                });
+
+                                            });
+                                             */
+                        
+                                        //});
+                                    });
+    }
+
+    pub fn display(&mut self, ui: &mut egui::Ui, data_provider: Arc<DataProvider>){
+        
+        //egui::TopBottomPanel::top("my_top_panel").show(ctx, |ui| {
+            //ui.label("Hello World!");
+            //self.ds.display(ui);
+        // });
+        
+        let frame = Frame::default().inner_margin(4.0);
+        ui.set_min_size(vec2(64.0, 100.0));
+        self.display_channels(ui, data_provider);
+
+        
+
+ 
+    }
+}
+
+//}
