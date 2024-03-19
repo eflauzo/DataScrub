@@ -51,7 +51,10 @@ impl DataProvider{
                 println!("aXXX1");
                 let response_content = match response{
                     Ok(response_content) => response_content,
-                    Err(e) => return,
+                    Err(e) => {
+                        sender.send(  ChannelData{data:vec!()} );
+                        return
+                    }
                 };
 
                 info!("aXXX 2");
@@ -73,13 +76,13 @@ impl DataProvider{
                         //        y: tuple.1,
                         //    });
                         //}
-
                         return  sender.send(data);
                     },
                     Err(e) => {
                         log::info!("didnt parsed {:?}", e);
                         println!("didnt parsed {:?}", e);
                         
+                        sender.send(  ChannelData{data:vec!()} );
                         
                         
                         return
@@ -107,7 +110,10 @@ impl DataProvider{
                 info!("XXX 1");
                 let response_content = match response{
                     Ok(response_content) => response_content,
-                    Err(e) => return,
+                    Err(e) => {
+                        sender.send(  Channels{channels:vec!()} );
+                        return
+                    }
                 };
                 
                 info!("XXX 2");
@@ -125,6 +131,7 @@ impl DataProvider{
                     },
                     Err(e) => {
                         log::info!("didnt parsed {:?}", e);
+                        sender.send(  Channels{channels:vec!()} );
                         return
                     }
                 };
@@ -157,13 +164,16 @@ impl DataProvider{
                 //let got_text = response.text().to_owned();
                 
                 println!("XXX 1");
-                let response_content = match response{
+                let extracted_response_content = match response{
                     Ok(response_content) => response_content,
-                    Err(e) => return,
+                    Err(e) => {
+                        sender.send(  Datasets{datasets:vec!()} );
+                        return;
+                    }
                 };
                 
                 println!("XXX 2");
-                let text_content = response_content.text().unwrap();
+                let text_content = extracted_response_content.text().unwrap();
                 //if let None = text_content {
                 //    return;
                 //}   
@@ -177,6 +187,7 @@ impl DataProvider{
                     },
                     Err(e) => {
                         println!("didnt parsed {:?}", e);
+                        sender.send(  Datasets{datasets:vec!()} );
                         return
                     }
                 };

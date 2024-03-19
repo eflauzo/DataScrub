@@ -9,5 +9,5 @@ mod channel_id;
 mod data_navigator_tab;
 mod splitter;
 
-pub use app::TemplateApp;
+pub use app::DataScrubApp;
 
