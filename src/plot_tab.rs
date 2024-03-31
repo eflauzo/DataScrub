@@ -4,6 +4,7 @@ use poll_promise::Promise;
 use std::borrow::Borrow;
 use std::sync::Arc;
 use super::provider::{ChannelData};
+use std::ops::RangeInclusive;
 
 use egui;
 use random_color::color_dictionary::{ColorDictionary, ColorInformation};
@@ -17,10 +18,17 @@ use egui_plot::{
     PlotPoints, PlotResponse, Points, Polygon, Text, VLine, 
 };
 
+// crate chrono;
+use chrono::prelude::DateTime;
+use chrono::Utc;
+use std::time::{SystemTime, UNIX_EPOCH, Duration};
+
 pub struct ChannelContext{
     id: Arc<ChannelId>,
     data: Option<Arc<Promise<ChannelData>>>,
     color: [f32; 3],
+    visible: bool,
+    show_points: bool,
 }
 
 
@@ -118,12 +126,31 @@ impl egui::Widget for &mut Header<'_>{
                             channel: channel_context.id.channel.clone(),
                         }, |ui| {
                             ui.label(channel_context.id.channel.to_owned());
+
+                            let option_promise_data = channel_context.data.clone();
+                            match option_promise_data {
+                                Some(data_promise) => {
+                                    if let Some(data) = data_promise.ready() {
+                                        let num_points = data.data.len();
+                                        ui.label(format!("({num_points} points.)"));
+                                    }else{
+                                        ui.label("[Waiting on Data]");
+                                    }
+                                },
+                                None => {
+                                    ui.label("[Not Ready]");
+                                },
+                            }
+                            
                         });
                         if (ui.button("x").clicked()){
                             println!("Kill {}",channel_context.id.channel);
                             kill_item = Some(i);
-
                         }
+                        ui.checkbox(&mut channel_context.visible, "Show");
+
+                        ui.checkbox(&mut channel_context.show_points, "Points");
+
                     });
                 
             };
@@ -152,9 +179,48 @@ impl crate::tab::TabRenderer for LogPlotTab{
         let mut start_offset = 0.0;
         let (drop_area_response, dropped_payload) = ui.dnd_drop_zone::<ChannelId>(frame, |ui| {
             
+            let time_formatter = |mark: GridMark, _digits, _range: &RangeInclusive<f64>| {
+                /*
+                let minutes = mark.value;
+                if minutes < 0.0 || 5.0 * MINS_PER_DAY <= minutes {
+                    // No labels outside value bounds
+                    String::new()
+                } else if is_approx_integer(minutes / MINS_PER_DAY) {
+                    // Days
+                    format!("Day {}", day(minutes))
+                } else {
+                    // Hours and minutes
+                    format!("{h}:{m:02}", h = hour(minutes), m = minute(minutes))
+                }
+                 */
+
+                // Creates a new SystemTime from the specified number of whole seconds
+                if (mark.value > 0.0){
+                let d = UNIX_EPOCH + Duration::from_secs_f64(mark.value);
+                // Create DateTime from SystemTime
+                let datetime = DateTime::<Utc>::from(d);
+                // Formats the combined date and time with the specified format string.
+                let date_str = datetime.format("%Y-%m-%d").to_string();
+                let timestamp_str = datetime.format("%H:%M:%S.%f").to_string();
+
+                //println!{"{}",timestamp_str};
+                
+                format!("{date_str}\n{timestamp_str}")
+                }else{
+                    String::new()
+                }
+            };
+
+            let x_axes = vec![
+                AxisHints::new_x().label(" ").formatter(time_formatter),
+                //AxisHints::new_x().label("Time").formatter(time_formatter),
+                //AxisHints::new_x().label("Value"),
+            ];
+
             let mut plot = Plot::new(self.id)
             //.legend(Legend::default())
             .y_axis_width(4)
+            .custom_x_axes(x_axes)
             .show_axes(true)
             .link_axis(egui::Id::new(1),true, false)
             .show_grid(true);
@@ -170,9 +236,8 @@ impl crate::tab::TabRenderer for LogPlotTab{
                     match option_promise_data {
                         Some(data_promise) => {
                             if let Some(data) = data_promise.ready() {
-                                //plot_ui.line( PlotPoints{data} );
-                                //Line::new();
-                                //let d = vec![[0.0, 0.0]];
+                                
+                                if (channel_context.visible){
                                 let x = PlotPoints::new(data.data.clone());
                                 let mut l = Line::new(x)
                                 .color(egui::Color32::from_rgb(
@@ -180,14 +245,24 @@ impl crate::tab::TabRenderer for LogPlotTab{
                                     (channel_context.color[1] * 255.0) as u8,
                                     (channel_context.color[2] * 255.0) as u8,
                                 ))
-                                //.color(egui::Color32::from_rgb(
-                                //        channel_context.color[0], 
-                                //        channel_context.color[1], 
-                                //        channel_context.color[2])
-                                //)
+                                .width(0.5)
                                 .name(&(channel_context).id.channel);
-                                //l
                                 plot_ui.line(l);
+                                
+                                if (channel_context.show_points){
+                                    let x2 = PlotPoints::new(data.data.clone());
+                                    let mut pts = Points::new(x2)
+                                    .color(egui::Color32::from_rgb(
+                                        (channel_context.color[0] * 255.0) as u8,
+                                        (channel_context.color[1] * 255.0) as u8,
+                                        (channel_context.color[2] * 255.0) as u8,
+                                    ))
+                                    .radius(2.0)
+                                    .name(&(channel_context).id.channel);
+                                    plot_ui.points(pts);
+                                };
+                                
+                                };
                             }
                         },
                         None    => {
@@ -246,7 +321,9 @@ impl crate::tab::TabRenderer for LogPlotTab{
                         
                             id: new_id,
                             data: Some(Arc::new(dragged_payload.data_source.load_data(dragged_payload.dataset.clone(), dragged_payload.channel.clone()))), //Option<Arc<Promise<ChannelData>>>,
-                            color: [(cl[0] as f32 / 255.0), (cl[1] as f32 / 255.0) ,(cl[2] as f32 / 255.0)]
+                            color: [(cl[0] as f32 / 255.0), (cl[1] as f32 / 255.0) ,(cl[2] as f32 / 255.0)],
+                            visible: true,
+                            show_points: true
                     }
                 );
             };

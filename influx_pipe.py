@@ -61,6 +61,7 @@ def get_data(dataset, channel):
         unixtime = tm_datetime.timestamp()#time.mktime(tm_datetime.timetuple())
         #print(unixtime, value)
         result.append([unixtime, value])
+        #time.sleep(0.010)
     return result
 
 '''
